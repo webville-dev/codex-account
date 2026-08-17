@@ -8,10 +8,12 @@ git tag -a v0.1.0 -m "codex-account v0.1.0"
 git push origin v0.1.0
 ```
 
-The tag must be SemVer (`v0.1.0`, `v1.2.3-rc.1`). The working tree on that
-commit should be clean. CI and releases run on the org self-hosted Linux
-runner. GoReleaser then builds `linux/amd64` and `linux/arm64`, writes
-checksums, and creates the GitHub Release.
+The tag must be SemVer (`v0.1.0`, `v1.2.3-rc.1`) and its commit must be
+reachable from `main`. The working tree on that commit should be clean. CI and
+releases run on the org self-hosted Linux runner. The release repeats the full
+format, vet, test, race, and build checks before GoReleaser builds
+`linux/amd64` and `linux/arm64`, writes checksums, and creates the GitHub
+Release.
 
 Local dry run (no tag, no publish):
 

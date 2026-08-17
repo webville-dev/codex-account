@@ -5,8 +5,7 @@ project_name: codex-account
 
 before:
   hooks:
-    - go mod verify
-    - go test ./...
+    - make check
 
 builds:
   - id: codex-account
@@ -42,6 +41,8 @@ archives:
     files:
       - none*
     builds_info:
+      owner: root
+      group: root
       mtime: "{{.CommitDate}}"
 
 checksum:
