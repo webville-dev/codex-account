@@ -13,6 +13,7 @@ import (
 	"nyashachiroro.com/codex-account/internal/app"
 	"nyashachiroro.com/codex-account/internal/oauth"
 	"nyashachiroro.com/codex-account/internal/platform"
+	"nyashachiroro.com/codex-account/internal/settings"
 	"nyashachiroro.com/codex-account/internal/version"
 )
 
@@ -97,18 +98,7 @@ func listCmd(svc *app.Service) *cobra.Command {
 				return nil
 			}
 			for _, row := range res.Rows {
-				prefix := " "
-				switch {
-				case res.PrimaryAgent == "codex" && row.LiveCodex:
-					prefix = "*"
-				case res.PrimaryAgent != "codex" && row.LivePi:
-					prefix = "*"
-				case row.LivePi:
-					prefix = "p"
-				case row.LiveCodex:
-					prefix = "c"
-				}
-				fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", prefix, account.Heading(row.Name, row.Plan, row.Email))
+				fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", listPrefix(res.PrimaryAgent, row), account.Heading(row.Name, row.Plan, row.Email))
 			}
 			return nil
 		},
@@ -220,7 +210,7 @@ func loginCmd(svc *app.Service) *cobra.Command {
 	var device bool
 	cmd := &cobra.Command{
 		Use:   "login",
-		Short: "ChatGPT OAuth via Pi or Codex, then write the grant to every tool",
+		Short: "ChatGPT OAuth via Pi, Codex, or OpenCode, then write the grant to every tool",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resolved, err := takeName(name, args)
@@ -229,8 +219,8 @@ func loginCmd(svc *app.Service) *cobra.Command {
 			}
 			if agent != "" {
 				agent = strings.ToLower(agent)
-				if agent != "pi" && agent != "codex" {
-					return fmt.Errorf("login supports only 'pi' or 'codex'; the resulting grant is copied to every tool")
+				if err := validAgent(agent, false); err != nil {
+					return err
 				}
 			}
 			res, err := svc.Login(cmd.Context(), app.LoginOptions{Agent: agent, Device: device, Name: resolved})
@@ -246,7 +236,7 @@ func loginCmd(svc *app.Service) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVarP(&agent, "agent", "a", "", "login UI to use (pi or codex; default from settings.primaryAgent)")
+	cmd.Flags().StringVarP(&agent, "agent", "a", "", "login UI to use (pi, codex, or opencode; default from settings.primaryAgent)")
 	cmd.Flags().StringVarP(&name, "name", "n", "", "saved account name")
 	cmd.Flags().BoolVar(&device, "device", false, "use device-code login")
 	cmd.Flags().Bool("device-auth", false, "alias for --device")
@@ -256,7 +246,7 @@ func loginCmd(svc *app.Service) *cobra.Command {
 		}
 		return nil
 	}
-	_ = cmd.RegisterFlagCompletionFunc("agent", cobra.FixedCompletions([]string{"pi", "codex"}, cobra.ShellCompDirectiveNoFileComp))
+	_ = cmd.RegisterFlagCompletionFunc("agent", cobra.FixedCompletions(settings.PrimaryAgents(), cobra.ShellCompDirectiveNoFileComp))
 	return cmd
 }
 
@@ -455,18 +445,31 @@ func saveFrom(agent string, fromCodex, fromPi, fromOpenCode, fromZed bool) (stri
 	return "", nil
 }
 
-func validAgent(agent string, all bool) error {
-	switch agent {
-	case "codex", "pi":
-		return nil
-	case "opencode", "zed":
-		if all {
-			return nil
+func listPrefix(primary string, row app.ListRow) string {
+	switch primary {
+	case "codex":
+		if row.LiveCodex {
+			return "*"
 		}
-		return fmt.Errorf("login supports only 'pi' or 'codex'; the resulting grant is copied to every tool")
+	case "opencode":
+		if row.LiveOpenCode {
+			return "*"
+		}
 	default:
-		return fmt.Errorf("unknown agent %q. Use 'codex', 'pi', 'opencode', or 'zed'", agent)
+		if row.LivePi {
+			return "*"
+		}
 	}
+	if row.LivePi {
+		return "p"
+	}
+	if row.LiveCodex {
+		return "c"
+	}
+	if row.LiveOpenCode {
+		return "o"
+	}
+	return " "
 }
 
 func completeNames(svc *app.Service) cobra.CompletionFunc {
@@ -484,6 +487,19 @@ func completeNames(svc *app.Service) cobra.CompletionFunc {
 	}
 }
 
+func validAgent(agent string, all bool) error {
+	if settings.IsPrimaryAgent(agent) {
+		return nil
+	}
+	if agent == "zed" {
+		if all {
+			return nil
+		}
+		return fmt.Errorf("login supports only 'pi', 'codex', or 'opencode'; the resulting grant is copied to every tool")
+	}
+	return fmt.Errorf("unknown agent %q. Use 'codex', 'pi', 'opencode', or 'zed'", agent)
+}
+
 const longHelp = `Save and switch one ChatGPT login for Pi, Codex, OpenCode, and Zed.
 
 The configured primary agent owns login and is the preferred source when equally fresh grants exist.
@@ -491,6 +507,6 @@ The other tools receive converted copies of that grant.
 Prefer this command instead of raw 'codex login'. Do not run 'codex logout' if you still want that saved account.
 
 Saved accounts live in $XDG_CONFIG_HOME/codex-account/accounts (default ~/.config/codex-account/accounts).
-primaryAgent in settings.json chooses the default login UI (pi or codex).
+primaryAgent in settings.json chooses the default login UI (pi, codex, or opencode).
 Codex credential storage must be file (the default), not keyring/auto/ephemeral.
 Restart Pi/Codex/OpenCode/Zed after switching.`

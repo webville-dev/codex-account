@@ -42,6 +42,44 @@ func TestRefreshAndSanitize(t *testing.T) {
 	}
 }
 
+func TestTokenResponseDefaultsMissingExpiry(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"access_token":  testutil.JWT("workspace-one", "person@example.com", "plus", time.Now().Add(time.Hour)),
+			"refresh_token": "new-refresh",
+		})
+	}))
+	defer srv.Close()
+	c := oauth.NewClient()
+	c.HTTP = srv.Client()
+	c.Endpoints.TokenURL = srv.URL
+	tok, err := c.Refresh(context.Background(), "old-refresh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tok.ExpiresIn != 3600 {
+		t.Fatalf("default expiry = %d", tok.ExpiresIn)
+	}
+}
+
+func TestAuthorizeURLOriginator(t *testing.T) {
+	t.Parallel()
+	c := oauth.NewClient()
+	pi := c.AuthorizeURL("challenge", "state")
+	if !strings.Contains(pi, "originator=pi") {
+		t.Fatalf("default originator missing: %s", pi)
+	}
+	oc := c.AuthorizeURLFor("challenge", "state", oauth.OriginatorOpenCode)
+	if !strings.Contains(oc, "originator=opencode") || strings.Contains(oc, "originator=pi") {
+		t.Fatalf("opencode originator missing: %s", oc)
+	}
+	piAgain := c.AuthorizeURL("challenge", "state")
+	if !strings.Contains(piAgain, "originator=pi") {
+		t.Fatalf("OpenCode call changed the default originator: %s", piAgain)
+	}
+}
+
 func TestBrowserLogin(t *testing.T) {
 	t.Parallel()
 	access := testutil.JWT("workspace-one", "person@example.com", "plus", time.Now().Add(time.Hour))
@@ -84,6 +122,39 @@ func TestBrowserLogin(t *testing.T) {
 	}
 	if g.RefreshToken != "browser-refresh" || g.AccountID != "workspace-one" {
 		t.Fatalf("%+v", g)
+	}
+}
+
+func TestBrowserLoginReportsProviderCallbackError(t *testing.T) {
+	t.Parallel()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().String()
+	c := oauth.NewClient()
+	c.Endpoints.CallbackAddr = addr
+	c.Listen = func(network, a string) (net.Listener, error) { return ln, nil }
+	c.OpenURL = func(ctx context.Context, raw string) error {
+		u, err := url.Parse(raw)
+		if err != nil {
+			return err
+		}
+		callback := "http://" + addr + "/auth/callback?error=access_denied&error_description=user+cancelled&state=" + u.Query().Get("state")
+		go func() {
+			time.Sleep(20 * time.Millisecond)
+			resp, getErr := http.Get(callback)
+			if getErr == nil {
+				_ = resp.Body.Close()
+			}
+		}()
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err = c.BrowserLoginFor(ctx, oauth.OriginatorOpenCode)
+	if err == nil || !strings.Contains(err.Error(), "OpenCode login failed: user cancelled") {
+		t.Fatalf("unexpected callback error: %v", err)
 	}
 }
 

@@ -10,9 +10,25 @@ import (
 )
 
 const (
-	AgentPi    = "pi"
-	AgentCodex = "codex"
+	AgentPi       = "pi"
+	AgentCodex    = "codex"
+	AgentOpenCode = "opencode"
 )
+
+var primaryAgents = [...]string{AgentPi, AgentCodex, AgentOpenCode}
+
+func PrimaryAgents() []string {
+	return append([]string(nil), primaryAgents[:]...)
+}
+
+func IsPrimaryAgent(agent string) bool {
+	for _, candidate := range primaryAgents {
+		if agent == candidate {
+			return true
+		}
+	}
+	return false
+}
 
 // File is the on-disk settings.json object.
 type File struct {
@@ -28,13 +44,11 @@ func (f File) Normalize() (File, error) {
 	if agent == "" {
 		agent = AgentPi
 	}
-	switch agent {
-	case AgentPi, AgentCodex:
+	if IsPrimaryAgent(agent) {
 		f.PrimaryAgent = agent
 		return f, nil
-	default:
-		return File{}, fmt.Errorf("primaryAgent must be %q or %q, found %q", AgentPi, AgentCodex, f.PrimaryAgent)
 	}
+	return File{}, fmt.Errorf("primaryAgent must be %q, %q, or %q, found %q", AgentPi, AgentCodex, AgentOpenCode, f.PrimaryAgent)
 }
 
 func Load(path string) (File, error) {

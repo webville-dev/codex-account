@@ -2,9 +2,14 @@ package app_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -495,29 +500,41 @@ func TestSnapshotTieKeepsPrimaryGrant(t *testing.T) {
 }
 
 func TestSyncTieUsesPrimaryAgent(t *testing.T) {
-	t.Parallel()
-	svc, home := newSvc(t, &zedStub{}, nil)
-	writePrimaryAgent(t, home, "codex")
-	expires := time.Now().Add(time.Hour)
-	pi := testutil.Grant("workspace-one", "pi-refresh", expires)
-	codex := testutil.Grant("workspace-one", "codex-refresh", expires)
-	if err := toolauth.WritePiFile(home.Paths.PiAuth, pi, time.Now()); err != nil {
-		t.Fatal(err)
-	}
-	if err := toolauth.WriteCodexFile(home.Paths.CodexAuth, codex); err != nil {
-		t.Fatal(err)
-	}
+	for _, primary := range []string{"codex", "opencode"} {
+		primary := primary
+		t.Run(primary, func(t *testing.T) {
+			t.Parallel()
+			svc, home := newSvc(t, &zedStub{}, nil)
+			writePrimaryAgent(t, home, primary)
+			expires := time.Now().Add(time.Hour)
+			pi := testutil.Grant("workspace-one", "pi-refresh", expires)
+			preferred := testutil.Grant("workspace-one", primary+"-refresh", expires)
+			if err := toolauth.WritePiFile(home.Paths.PiAuth, pi, time.Now()); err != nil {
+				t.Fatal(err)
+			}
+			switch primary {
+			case "codex":
+				if err := toolauth.WriteCodexFile(home.Paths.CodexAuth, preferred); err != nil {
+					t.Fatal(err)
+				}
+			case "opencode":
+				if err := toolauth.WriteOpenCodeFile(home.Paths.OpenCodeAuth, preferred, time.Now()); err != nil {
+					t.Fatal(err)
+				}
+			}
 
-	result, err := svc.Sync(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, err := toolauth.ReadAnyFile(home.Paths.PiAuth)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.RefreshToken != "codex-refresh" || !strings.Contains(result.Message, "codex") {
-		t.Fatalf("sync did not select primary Codex grant: %+v, %q", got, result.Message)
+			result, err := svc.Sync(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := toolauth.ReadAnyFile(home.Paths.PiAuth)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.RefreshToken != primary+"-refresh" || !strings.Contains(result.Message, primary) {
+				t.Fatalf("sync did not select primary %s grant: %+v, %q", primary, got, result.Message)
+			}
+		})
 	}
 }
 
@@ -529,6 +546,67 @@ func TestLoginUsesPrimaryAgentFromSettings(t *testing.T) {
 	_, err := svc.Login(context.Background(), app.LoginOptions{})
 	if err == nil || !strings.Contains(err.Error(), "codex") {
 		t.Fatalf("expected Codex login path, got %v", err)
+	}
+}
+
+func TestLoginUsesOpenCodePrimaryAgent(t *testing.T) {
+	t.Parallel()
+	svc, home := newSvc(t, &zedStub{}, nil)
+	writePrimaryAgent(t, home, "opencode")
+
+	access := testutil.JWT("workspace-one", "person@example.com", "plus", time.Now().Add(time.Hour))
+	tokenSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"access_token":  access,
+			"refresh_token": "opencode-refresh",
+			"expires_in":    3600,
+		})
+	}))
+	t.Cleanup(tokenSrv.Close)
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().String()
+	var originator string
+	svc.OAuth.HTTP = tokenSrv.Client()
+	svc.OAuth.Endpoints.TokenURL = tokenSrv.URL
+	svc.OAuth.Endpoints.CallbackAddr = addr
+	svc.OAuth.Listen = func(network, a string) (net.Listener, error) { return ln, nil }
+	svc.OAuth.OpenURL = func(ctx context.Context, raw string) error {
+		u, err := url.Parse(raw)
+		if err != nil {
+			return err
+		}
+		originator = u.Query().Get("originator")
+		cb := "http://" + addr + "/auth/callback?code=abc&state=" + u.Query().Get("state")
+		go func() {
+			time.Sleep(20 * time.Millisecond)
+			_, _ = http.Get(cb)
+		}()
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	res, err := svc.Login(ctx, app.LoginOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if originator != "opencode" {
+		t.Fatalf("originator %q", originator)
+	}
+	if !strings.Contains(res.Notes[0], "OpenCode") {
+		t.Fatalf("notes %+v", res.Notes)
+	}
+	got, err := toolauth.ReadAnyFile(home.Paths.OpenCodeAuth)
+	if err != nil || got.RefreshToken != "opencode-refresh" {
+		t.Fatalf("opencode %+v %v", got, err)
+	}
+	pi, err := toolauth.ReadAnyFile(home.Paths.PiAuth)
+	if err != nil || pi.RefreshToken != "opencode-refresh" {
+		t.Fatalf("pi %+v %v", pi, err)
 	}
 }
 

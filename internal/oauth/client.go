@@ -71,6 +71,13 @@ type TokenRefresher interface {
 
 type URLOpener func(ctx context.Context, rawURL string) error
 
+type Originator string
+
+const (
+	OriginatorPi       Originator = "pi"
+	OriginatorOpenCode Originator = "opencode"
+)
+
 type Client struct {
 	HTTP      *http.Client
 	Endpoints Endpoints
@@ -160,8 +167,11 @@ func (c *Client) tokenRequest(ctx context.Context, form url.Values) (TokenRespon
 		IDToken:      stringField(raw["id_token"]),
 		ExpiresIn:    intField(raw["expires_in"]),
 	}
-	if tok.AccessToken == "" || tok.RefreshToken == "" || tok.ExpiresIn == 0 {
+	if tok.AccessToken == "" || tok.RefreshToken == "" {
 		return TokenResponse{}, fmt.Errorf("OpenAI Codex token response missing fields")
+	}
+	if tok.ExpiresIn <= 0 {
+		tok.ExpiresIn = 3600
 	}
 	return tok, nil
 }
@@ -232,7 +242,28 @@ func RandomState() (string, error) {
 	return hex.EncodeToString(raw), nil
 }
 
+func (o Originator) normalized() Originator {
+	if o == OriginatorOpenCode {
+		return o
+	}
+	return OriginatorPi
+}
+
+func (o Originator) label() string {
+	switch o.normalized() {
+	case OriginatorOpenCode:
+		return "OpenCode"
+	default:
+		return "Pi"
+	}
+}
+
 func (c *Client) AuthorizeURL(challenge, state string) string {
+	return c.AuthorizeURLFor(challenge, state, OriginatorPi)
+}
+
+func (c *Client) AuthorizeURLFor(challenge, state string, originator Originator) string {
+	originator = originator.normalized()
 	q := url.Values{
 		"response_type":              {"code"},
 		"client_id":                  {c.Endpoints.ClientID},
@@ -243,7 +274,7 @@ func (c *Client) AuthorizeURL(challenge, state string) string {
 		"state":                      {state},
 		"id_token_add_organizations": {"true"},
 		"codex_cli_simplified_flow":  {"true"},
-		"originator":                 {"pi"},
+		"originator":                 {string(originator)},
 	}
 	u, err := url.Parse(c.Endpoints.AuthorizeURL)
 	if err != nil {
@@ -254,6 +285,11 @@ func (c *Client) AuthorizeURL(challenge, state string) string {
 }
 
 func (c *Client) BrowserLogin(ctx context.Context) (account.Grant, error) {
+	return c.BrowserLoginFor(ctx, OriginatorPi)
+}
+
+func (c *Client) BrowserLoginFor(ctx context.Context, originator Originator) (account.Grant, error) {
+	originator = originator.normalized()
 	verifier, challenge, err := PKCE()
 	if err != nil {
 		return account.Grant{}, err
@@ -268,15 +304,15 @@ func (c *Client) BrowserLogin(ctx context.Context) (account.Grant, error) {
 	}
 	ln, err := listen("tcp", c.Endpoints.CallbackAddr)
 	if err != nil {
-		return account.Grant{}, fmt.Errorf("cannot bind %s for Pi login: %w", c.Endpoints.CallbackAddr, err)
+		return account.Grant{}, fmt.Errorf("cannot bind %s for %s login: %w", c.Endpoints.CallbackAddr, originator.label(), err)
 	}
-	authURL := c.AuthorizeURL(challenge, state)
+	authURL := c.AuthorizeURLFor(challenge, state, originator)
 	c.note("Open this URL in your browser:\n%s", authURL)
 	if c.OpenURL != nil {
 		_ = c.OpenURL(ctx, authURL)
 	}
 
-	code, err := waitForCode(ctx, ln, state)
+	code, err := waitForCode(ctx, ln, state, originator.label())
 	if err != nil {
 		return account.Grant{}, err
 	}
@@ -285,7 +321,7 @@ func (c *Client) BrowserLogin(ctx context.Context) (account.Grant, error) {
 		return account.Grant{}, err
 	}
 	if g.Identity().AccountID == "" {
-		return account.Grant{}, fmt.Errorf("failed to extract ChatGPT account id from the Pi access token")
+		return account.Grant{}, fmt.Errorf("failed to extract ChatGPT account id from the %s access token", originator.label())
 	}
 	return g, nil
 }
@@ -297,7 +333,7 @@ func (c *Client) note(format string, args ...any) {
 	fmt.Fprintf(c.Prompt, format+"\n", args...)
 }
 
-func waitForCode(ctx context.Context, ln net.Listener, state string) (string, error) {
+func waitForCode(ctx context.Context, ln net.Listener, state, label string) (string, error) {
 	defer ln.Close()
 	type result struct {
 		code string
@@ -311,6 +347,19 @@ func waitForCode(ctx context.Context, ln net.Listener, state string) (string, er
 			http.Error(w, "State mismatch. You can close this window.", http.StatusBadRequest)
 			select {
 			case ch <- result{err: fmt.Errorf("OAuth state mismatch")}:
+			default:
+			}
+			return
+		}
+		if oauthErr := q.Get("error"); oauthErr != "" {
+			detail := strings.TrimSpace(q.Get("error_description"))
+			if detail == "" {
+				detail = oauthErr
+			}
+			detail = trimErr(detail)
+			http.Error(w, "Authentication failed. You can close this window.", http.StatusBadRequest)
+			select {
+			case ch <- result{err: fmt.Errorf("%s login failed: %s", label, detail)}:
 			default:
 			}
 			return
@@ -342,7 +391,7 @@ func waitForCode(ctx context.Context, ln net.Listener, state string) (string, er
 	select {
 	case <-ctx.Done():
 		if ctx.Err() == context.DeadlineExceeded {
-			return "", fmt.Errorf("Pi login timed out waiting for the browser callback")
+			return "", fmt.Errorf("%s login timed out waiting for the browser callback", label)
 		}
 		return "", ctx.Err()
 	case r := <-ch:
@@ -351,6 +400,11 @@ func waitForCode(ctx context.Context, ln net.Listener, state string) (string, er
 }
 
 func (c *Client) DeviceLogin(ctx context.Context) (account.Grant, error) {
+	return c.DeviceLoginFor(ctx, OriginatorPi)
+}
+
+func (c *Client) DeviceLoginFor(ctx context.Context, originator Originator) (account.Grant, error) {
+	originator = originator.normalized()
 	payload, _ := json.Marshal(map[string]string{"client_id": c.Endpoints.ClientID})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.Endpoints.DeviceUserCode, bytes.NewReader(payload))
 	if err != nil {
@@ -386,11 +440,11 @@ func (c *Client) DeviceLogin(ctx context.Context) (account.Grant, error) {
 	for {
 		if err := c.Clock.Sleep(ctx, interval); err != nil {
 			if ctx.Err() == context.DeadlineExceeded {
-				return account.Grant{}, fmt.Errorf("Pi device login timed out")
+				return account.Grant{}, fmt.Errorf("%s device login timed out", originator.label())
 			}
 			return account.Grant{}, err
 		}
-		grant, retry, slow, err := c.pollDevice(ctx, deviceAuthID, userCode)
+		grant, retry, slow, err := c.pollDevice(ctx, deviceAuthID, userCode, originator)
 		if err != nil {
 			return account.Grant{}, err
 		}
@@ -405,7 +459,7 @@ func (c *Client) DeviceLogin(ctx context.Context) (account.Grant, error) {
 	}
 }
 
-func (c *Client) pollDevice(ctx context.Context, deviceAuthID, userCode string) (account.Grant, bool, bool, error) {
+func (c *Client) pollDevice(ctx context.Context, deviceAuthID, userCode string, originator Originator) (account.Grant, bool, bool, error) {
 	payload, _ := json.Marshal(map[string]string{
 		"device_auth_id": deviceAuthID,
 		"user_code":      userCode,
@@ -448,7 +502,7 @@ func (c *Client) pollDevice(ctx context.Context, deviceAuthID, userCode string) 
 		return account.Grant{}, false, false, err
 	}
 	if g.Identity().AccountID == "" {
-		return account.Grant{}, false, false, fmt.Errorf("failed to extract ChatGPT account id from the Pi access token")
+		return account.Grant{}, false, false, fmt.Errorf("failed to extract ChatGPT account id from the %s access token", originator.label())
 	}
 	return g, false, false, nil
 }

@@ -22,11 +22,12 @@ type ListResult struct {
 }
 
 type ListRow struct {
-	Name      string
-	Plan      string
-	Email     string
-	LivePi    bool
-	LiveCodex bool
+	Name         string
+	Plan         string
+	Email        string
+	LivePi       bool
+	LiveCodex    bool
+	LiveOpenCode bool
 }
 
 func (s *Service) List(ctx context.Context) (ListResult, error) {
@@ -49,12 +50,19 @@ func (s *Service) List(ctx context.Context) (ListResult, error) {
 	if err != nil {
 		return ListResult{}, fmt.Errorf("read Codex login: %w", err)
 	}
-	var piName, codexName string
+	opencode, opencodeOK, err := s.live(ctx, "opencode")
+	if err != nil {
+		return ListResult{}, fmt.Errorf("read OpenCode login: %w", err)
+	}
+	var piName, codexName, openCodeName string
 	if piOK {
 		piName = account.PreferredSavedName(pi, existing)
 	}
 	if codexOK {
 		codexName = account.PreferredSavedName(codex, existing)
+	}
+	if opencodeOK {
+		openCodeName = account.PreferredSavedName(opencode, existing)
 	}
 	files, _ := s.Store.ListFiles()
 	rows := make([]ListRow, 0, len(files))
@@ -65,11 +73,12 @@ func (s *Service) List(ctx context.Context) (ListResult, error) {
 		}
 		id := g.Identity()
 		rows = append(rows, ListRow{
-			Name:      f.Name,
-			Plan:      id.Plan,
-			Email:     id.Email,
-			LivePi:    f.Name == piName,
-			LiveCodex: f.Name == codexName,
+			Name:         f.Name,
+			Plan:         id.Plan,
+			Email:        id.Email,
+			LivePi:       f.Name == piName,
+			LiveCodex:    f.Name == codexName,
+			LiveOpenCode: f.Name == openCodeName,
 		})
 	}
 	return ListResult{Rows: rows, PrimaryAgent: primary}, nil
@@ -1067,28 +1076,46 @@ func (s *Service) Login(ctx context.Context, opts LoginOptions) (LoginResult, er
 			}
 		}
 		agent = strings.ToLower(agent)
-		if agent != "pi" && agent != "codex" {
-			return fmt.Errorf("login supports only 'pi' or 'codex'; the resulting grant is copied to every tool")
-		}
-		if _, err := s.snapshotLives(ctx); err != nil {
-			return err
-		}
-		if agent == "codex" {
+		switch agent {
+		case "codex":
+			if _, err := s.snapshotLives(ctx); err != nil {
+				return err
+			}
 			return s.loginCodex(ctx, opts, &result)
+		case "pi", "opencode":
+			if _, err := s.snapshotLives(ctx); err != nil {
+				return err
+			}
+			return s.loginOAuth(ctx, opts, &result, agent)
+		default:
+			return fmt.Errorf("login supports only 'pi', 'codex', or 'opencode'; the resulting grant is copied to every tool")
 		}
-		return s.loginPi(ctx, opts, &result)
 	})
 	return result, err
 }
 
-func (s *Service) loginPi(ctx context.Context, opts LoginOptions, result *LoginResult) error {
-	if err := os.MkdirAll(s.Paths.PiHome, 0o700); err != nil {
+func (s *Service) loginOAuth(ctx context.Context, opts LoginOptions, result *LoginResult, agent string) error {
+	label := "Pi openai-codex"
+	home := s.Paths.PiHome
+	others := "Codex, OpenCode, and Zed"
+	writeFirst := func(g account.Grant) error {
+		return toolauth.WritePiFile(s.Paths.PiAuth, g, s.now())
+	}
+	if agent == "opencode" {
+		label = "OpenCode ChatGPT"
+		home = s.Paths.OpenCodeHome
+		others = "Pi, Codex, and Zed"
+		writeFirst = func(g account.Grant) error {
+			return toolauth.WriteOpenCodeFile(s.Paths.OpenCodeAuth, g, s.now())
+		}
+	}
+	if err := os.MkdirAll(home, 0o700); err != nil {
 		return err
 	}
 	if opts.Name != "" {
-		result.Notes = append(result.Notes, fmt.Sprintf("Starting Pi openai-codex login for '%s'.", opts.Name))
+		result.Notes = append(result.Notes, fmt.Sprintf("Starting %s login for '%s'.", label, opts.Name))
 	} else {
-		result.Notes = append(result.Notes, "Starting Pi openai-codex login. The slot will be named from the ChatGPT email.")
+		result.Notes = append(result.Notes, fmt.Sprintf("Starting %s login. The slot will be named from the ChatGPT email.", label))
 	}
 	loginCtx := ctx
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
@@ -1102,17 +1129,21 @@ func (s *Service) loginPi(ctx context.Context, opts LoginOptions, result *LoginR
 	if s.OAuth.OpenURL == nil {
 		s.OAuth.OpenURL = s.openURL
 	}
+	originator := oauth.OriginatorPi
+	if agent == "opencode" {
+		originator = oauth.OriginatorOpenCode
+	}
 	var g account.Grant
 	var err error
 	if opts.Device {
-		g, err = s.OAuth.DeviceLogin(loginCtx)
+		g, err = s.OAuth.DeviceLoginFor(loginCtx, originator)
 	} else {
-		g, err = s.OAuth.BrowserLogin(loginCtx)
+		g, err = s.OAuth.BrowserLoginFor(loginCtx, originator)
 	}
 	if err != nil {
 		return err
 	}
-	if err := toolauth.WritePiFile(s.Paths.PiAuth, g, s.now()); err != nil {
+	if err := writeFirst(g); err != nil {
 		return err
 	}
 	if err := s.writeAll(ctx, g); err != nil {
@@ -1121,7 +1152,7 @@ func (s *Service) loginPi(ctx context.Context, opts LoginOptions, result *LoginR
 	if err := s.saveAfterLogin(ctx, g, opts.Name); err != nil {
 		return err
 	}
-	result.Message = "Wrote the same grant to Codex, OpenCode, and Zed. Restart Pi/Codex/OpenCode/Zed if they are already running."
+	result.Message = fmt.Sprintf("Wrote the same grant to %s. Restart Pi/Codex/OpenCode/Zed if they are already running.", others)
 	return nil
 }
 

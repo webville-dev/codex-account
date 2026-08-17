@@ -12,8 +12,8 @@ or compatibility branches. New behavior should be specified and tested in Go.
 ## Goal
 
 Provide one safe executable for saving and distributing a ChatGPT Codex grant
-across Pi, Codex, OpenCode, and Zed. A user logs in once through Pi or Codex;
-the CLI converts and writes that grant to every supported tool.
+across Pi, Codex, OpenCode, and Zed. A user logs in once through Pi, Codex, or
+OpenCode; this tool converts that grant into each tool's expected format.
 
 ## Architecture
 
@@ -62,8 +62,8 @@ Environment overrides:
 Codex credentials always live at `$CODEX_HOME/auth.json` and require
 `cli_auth_credentials_store = "file"` when that setting is present.
 Saved grants and settings default to `$XDG_CONFIG_HOME/codex-account`.
-`settings.json` may select `pi` or `codex` as `primaryAgent`; a missing setting
-defaults to `pi`.
+`settings.json` may select `pi`, `codex`, or `opencode` as `primaryAgent`; a
+missing setting defaults to `pi`.
 
 ## Safety invariants
 
@@ -153,7 +153,7 @@ access or refresh tokens.
 - [ ] Build a versioned release binary.
 - [ ] Test all commands with isolated homes and a disposable credential store.
 - [ ] Back up real credentials before the first manual mutating test.
-- [ ] Complete one real Pi login and one real Codex login.
+- [ ] Complete one real Pi, Codex, and OpenCode login.
 - [ ] Complete one real refresh and recovery sync.
 - [ ] Package the binary for dotfiles installation.
 - [ ] Generate Fish completion with `codex-account completion fish`.

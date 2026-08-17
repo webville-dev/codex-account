@@ -94,6 +94,39 @@ func TestListMarksConfiguredPrimary(t *testing.T) {
 	}
 }
 
+func TestListMarksOpenCodePrimary(t *testing.T) {
+	t.Parallel()
+	home := testutil.NewHome(t)
+	if err := os.WriteFile(home.Paths.SettingsFile, []byte("{\"primaryAgent\":\"opencode\"}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	expires := time.Now().Add(time.Hour)
+	pi := testutil.Grant("pi-workspace", "pi-refresh", expires)
+	opencode := testutil.Grant("opencode-workspace", "opencode-refresh", expires)
+	if err := toolauth.WritePiFile(home.Paths.PiAuth, pi, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := toolauth.WriteOpenCodeFile(home.Paths.OpenCodeAuth, opencode, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := toolauth.WriteCodexFile(home.Paths.AccountsHome+"/pi-work.json", pi); err != nil {
+		t.Fatal(err)
+	}
+	if err := toolauth.WriteCodexFile(home.Paths.AccountsHome+"/opencode-work.json", opencode); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := app.New(app.Service{Paths: home.Paths, Zed: &toolauth.MemoryStore{}})
+	var out bytes.Buffer
+	code := cli.Execute(context.Background(), []string{"list"}, strings.NewReader(""), &out, io.Discard, svc)
+	if code != 0 {
+		t.Fatalf("list exit %d: %s", code, out.String())
+	}
+	if !strings.Contains(out.String(), "* opencode-work") || !strings.Contains(out.String(), "p pi-work") {
+		t.Fatalf("primary markers missing:\n%s", out.String())
+	}
+}
+
 func TestVersionAndAliases(t *testing.T) {
 	t.Parallel()
 	home := testutil.NewHome(t)
