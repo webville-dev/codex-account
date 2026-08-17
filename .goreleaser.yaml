@@ -1,0 +1,60 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: codex-account
+
+before:
+  hooks:
+    - go mod verify
+    - go test ./...
+
+builds:
+  - id: codex-account
+    main: ./cmd/codex-account
+    binary: codex-account
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    goamd64:
+      - v1
+    goarm64:
+      - v8.0
+    flags:
+      - -trimpath
+      - -mod=readonly
+    ldflags:
+      - -s -w
+      - -X nyashachiroro.com/codex-account/internal/version.Version={{.Version}}
+      - -X nyashachiroro.com/codex-account/internal/version.Commit={{.FullCommit}}
+      - -X nyashachiroro.com/codex-account/internal/version.BuildTime={{.CommitDate}}
+    mod_timestamp: "{{.CommitTimestamp}}"
+
+archives:
+  - ids:
+      - codex-account
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    wrap_in_directory: true
+    files:
+      - none*
+    builds_info:
+      mtime: "{{.CommitDate}}"
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_SHA256SUMS"
+  algorithm: sha256
+
+changelog:
+  use: git
+  sort: asc
+  filters:
+    exclude:
+      - "^Merge pull request"
+      - "^Merge branch"
+
+release:
+  prerelease: auto

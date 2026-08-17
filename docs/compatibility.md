@@ -4,6 +4,9 @@ The Go CLI is the sole implementation and source of truth. It does not migrate
 or preserve saved-account layouts from the former Fish/Python implementation.
 Existing accounts should be created again with `codex-account login`.
 
+Release artifacts are produced by GoReleaser from git tags. See
+[releasing.md](releasing.md).
+
 ## Environment overrides
 
 | Variable | Effect | Default |

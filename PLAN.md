@@ -149,8 +149,8 @@ access or refresh tokens.
 
 - [ ] Decide and configure the durable Git repository at the module path
       `nyashachiroro.com/codex-account`.
-- [ ] Add CI for test, race, vet, build, and formatting checks.
-- [ ] Build a versioned release binary.
+- [x] Add CI for test, race, vet, build, and formatting checks.
+- [x] Build a versioned release binary.
 - [ ] Test all commands with isolated homes and a disposable credential store.
 - [ ] Back up real credentials before the first manual mutating test.
 - [ ] Complete one real Pi, Codex, and OpenCode login.
