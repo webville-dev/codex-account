@@ -22,6 +22,7 @@ import (
 	"github.com/webville-dev/codex-account/internal/platform"
 	"github.com/webville-dev/codex-account/internal/testutil"
 	"github.com/webville-dev/codex-account/internal/toolauth"
+	"github.com/webville-dev/codex-account/internal/usage"
 )
 
 type refreshStub struct {
@@ -617,5 +618,63 @@ func TestLoginRejectsInvalidPrimaryAgent(t *testing.T) {
 	_, err := svc.Login(context.Background(), app.LoginOptions{})
 	if err == nil || !strings.Contains(err.Error(), "primaryAgent") {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestUsageListsSameWorkspaceTeammatesSeparately(t *testing.T) {
+	t.Parallel()
+	svc, home := newSvc(t, &zedStub{}, nil)
+	exp := time.Now().Add(time.Hour)
+	workspace := "shared-team-workspace"
+	left := testutil.GrantIdent(workspace, "left@example.com", "team", "user-left", "refresh-left", exp)
+	right := testutil.GrantIdent(workspace, "right@example.com", "team", "user-right", "refresh-right", exp)
+	if err := toolauth.WriteCodexFile(home.Paths.AccountsHome+"/left@example.com.team.json", left); err != nil {
+		t.Fatal(err)
+	}
+	if err := toolauth.WriteCodexFile(home.Paths.AccountsHome+"/right@example.com.team.json", right); err != nil {
+		t.Fatal(err)
+	}
+
+	tokens := map[string]int{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tokens[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")]++
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"plan_type": "team",
+			"rate_limit": map[string]any{
+				"primary_window": map[string]any{
+					"used_percent":         40,
+					"reset_after_seconds":  60,
+					"limit_window_seconds": 604800,
+				},
+				"allowed": true,
+			},
+		})
+	}))
+	defer srv.Close()
+	client := usage.NewClient()
+	client.HTTP = srv.Client()
+	client.URL = srv.URL
+	svc.UsageClient = client
+
+	rows, err := svc.Usage(context.Background(), app.UsageOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("got %d rows %#v", len(rows), rows)
+	}
+	emails := map[string]bool{}
+	for _, row := range rows {
+		if !row.OK {
+			t.Fatalf("row %+v", row)
+		}
+		emails[row.Email] = true
+	}
+	if !emails["left@example.com"] || !emails["right@example.com"] {
+		t.Fatalf("emails %+v", emails)
+	}
+	if tokens[left.AccessToken] != 1 || tokens[right.AccessToken] != 1 {
+		t.Fatalf("fetches %+v", tokens)
 	}
 }

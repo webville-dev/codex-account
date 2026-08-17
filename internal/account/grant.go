@@ -25,6 +25,7 @@ type Grant struct {
 
 type Identity struct {
 	AccountID string
+	UserID    string
 	Email     string
 	Plan      string
 	ClientID  string
@@ -36,6 +37,9 @@ func (g Grant) Identity() Identity {
 		p := Payload(token)
 		if id.AccountID == "" {
 			id.AccountID = p.AccountID
+		}
+		if id.UserID == "" {
+			id.UserID = p.UserID
 		}
 		if id.Plan == "" {
 			id.Plan = p.Plan

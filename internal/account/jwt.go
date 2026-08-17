@@ -16,6 +16,7 @@ type Claims struct {
 	Email     string
 	Plan      string
 	AccountID string
+	UserID    string
 	ClientID  string
 }
 
@@ -38,6 +39,10 @@ func Payload(token string) Claims {
 	if auth, ok := payload[openaiAuthClaim].(map[string]any); ok {
 		out.AccountID = stringField(auth["chatgpt_account_id"])
 		out.Plan = stringField(auth["chatgpt_plan_type"])
+		out.UserID = stringField(auth["chatgpt_user_id"])
+		if out.UserID == "" {
+			out.UserID = stringField(auth["user_id"])
+		}
 	}
 	return out
 }

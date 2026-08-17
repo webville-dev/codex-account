@@ -54,7 +54,7 @@ mutation lock live next to `CODEX_ACCOUNTS_HOME` (its parent directory).
 | `login` | | `-a/--agent pi\|codex\|opencode` (default `settings.primaryAgent`, else `pi`), `--device/--device-auth`, `-n/--name` | primary-agent OAuth | yes | notes on stderr/stdout; distributes to all four |
 | `sync` | | none | — | yes | already-in-sync or synced-from source |
 | `refresh` | | `-n/--name` or positional | live primary, then remaining tools | yes | refreshed targets |
-| `usage` | `limits`, `quota` | `-a/--agent`, `-n/--name`, `--json`, `--all` | all distinct workspaces | maybe (token refresh) | human windows or JSON array |
+| `usage` | `limits`, `quota` | `-a/--agent`, `-n/--name`, `--json` | every saved account, plus any unsaved live login | maybe (token refresh) | human windows or JSON array |
 | `rm` | `remove`, `delete` | `-n/--name` or positional `NAME` | required name | yes (saved only) | `Removed saved account 'NAME'.` |
 
 An explicit source passed to `save` is exact and never falls back to another
@@ -62,7 +62,7 @@ tool. Automatic source selection starts with the primary agent and falls back
 through the remaining tools. When grants are equally fresh, the primary agent
 wins the tie.
 
-`--name` and `--all` are mutually exclusive on `usage`. Login accepts `pi`,
+Login accepts `pi`,
 `codex`, or `opencode`. Save `--from` accepts `pi`, `codex`, `opencode`, `zed`.
 
 Cobra rejects unknown flags and extra positionals. Help and completion must not

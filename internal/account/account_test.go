@@ -15,8 +15,20 @@ func TestPayloadExtractsClaims(t *testing.T) {
 	if got.AccountID != "workspace-one" || got.Email != "person@example.com" || got.Plan != "plus" {
 		t.Fatalf("%+v", got)
 	}
+	if got.UserID != "" {
+		t.Fatalf("unexpected user id %+v", got)
+	}
 	if got.Expiry.Unix() != 9999999999 {
 		t.Fatalf("exp %v", got.Expiry)
+	}
+}
+
+func TestPayloadExtractsUserID(t *testing.T) {
+	t.Parallel()
+	token := testutil.JWTIdent("workspace-one", "a@b.co", "team", "user-seat-1", time.Unix(9999999999, 0))
+	got := account.Payload(token)
+	if got.AccountID != "workspace-one" || got.UserID != "user-seat-1" || got.Email != "a@b.co" || got.Plan != "team" {
+		t.Fatalf("%+v", got)
 	}
 }
 

@@ -146,13 +146,13 @@ func TestVersionAndAliases(t *testing.T) {
 	}
 }
 
-func TestNameAndAllMutuallyExclusive(t *testing.T) {
+func TestUnknownUsageAllFlag(t *testing.T) {
 	t.Parallel()
 	home := testutil.NewHome(t)
 	svc := app.New(app.Service{Paths: home.Paths, Zed: &toolauth.MemoryStore{}})
 	var errBuf bytes.Buffer
-	code := cli.Execute(context.Background(), []string{"usage", "--all", "-n", "work"}, strings.NewReader(""), io.Discard, &errBuf, svc)
-	if code == 0 || !strings.Contains(errBuf.String(), "either") {
+	code := cli.Execute(context.Background(), []string{"usage", "--all"}, strings.NewReader(""), io.Discard, &errBuf, svc)
+	if code == 0 || !strings.Contains(errBuf.String(), "unknown flag") {
 		t.Fatalf("%d %s", code, errBuf.String())
 	}
 }

@@ -293,7 +293,7 @@ func refreshCmd(svc *app.Service) *cobra.Command {
 
 func usageCmd(svc *app.Service) *cobra.Command {
 	var agent, name string
-	var asJSON, all bool
+	var asJSON bool
 	cmd := &cobra.Command{
 		Use:               "usage",
 		Aliases:           []string{"limits", "quota"},
@@ -314,7 +314,6 @@ func usageCmd(svc *app.Service) *cobra.Command {
 			rows, err := svc.Usage(cmd.Context(), app.UsageOptions{
 				Agent: agent,
 				Name:  resolved,
-				All:   all,
 				JSON:  asJSON,
 			})
 			if asJSON {
@@ -335,7 +334,6 @@ func usageCmd(svc *app.Service) *cobra.Command {
 	bindAgentFlags(cmd, &agent)
 	cmd.Flags().StringVarP(&name, "name", "n", "", "saved account name")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "print JSON")
-	cmd.Flags().BoolVar(&all, "all", false, "include every distinct workspace")
 	_ = cmd.RegisterFlagCompletionFunc("name", completeNames(svc))
 	return cmd
 }

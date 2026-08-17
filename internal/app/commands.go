@@ -591,7 +591,6 @@ func (s *Service) Refresh(ctx context.Context, name string) (RefreshResult, erro
 type UsageOptions struct {
 	Agent string
 	Name  string
-	All   bool
 	JSON  bool
 }
 
@@ -622,9 +621,6 @@ func (s *Service) Usage(ctx context.Context, opts UsageOptions) ([]UsageRow, err
 		if err := s.Store.RequireNoPending("query usage"); err != nil {
 			return err
 		}
-		if opts.Name != "" && opts.All {
-			return fmt.Errorf("use either --all or -n/--name, not both")
-		}
 		name := opts.Name
 		if name != "" {
 			resolved, err := s.resolveName(name)
@@ -637,22 +633,8 @@ func (s *Service) Usage(ctx context.Context, opts UsageOptions) ([]UsageRow, err
 		if err != nil {
 			return err
 		}
-		cache := map[string]UsageRow{}
 		for _, t := range targets {
-			accountID := t.source.accountID
-			var row UsageRow
-			if accountID != "" {
-				if cached, ok := cache[accountID]; ok {
-					row = cached
-					row.Refreshed = false
-				}
-			}
-			if row.AccountID == "" && !row.OK && row.Error == "" {
-				row = s.fetchUsage(ctx, t)
-				if accountID != "" && row.OK {
-					cache[accountID] = row
-				}
-			}
+			row := s.fetchUsage(ctx, t)
 			row.Agents = t.agents
 			row.Live = t.live
 			row.Name = t.display
@@ -697,6 +679,7 @@ type usageSource struct {
 	path      string
 	live      bool
 	accountID string
+	userID    string
 	email     string
 	plan      string
 	slot      string
@@ -833,8 +816,12 @@ func (s *Service) usageTargets(ctx context.Context, agentFilter, name string) ([
 
 func usageGroupKey(src usageSource) string {
 	switch {
-	case src.accountID != "":
-		return "id:" + src.accountID
+	case src.userID != "" && src.accountID != "":
+		return "user:" + src.userID + ":ws:" + src.accountID
+	case src.userID != "":
+		return "user:" + src.userID
+	case src.email != "" && src.accountID != "":
+		return "email:" + src.email + ":ws:" + src.accountID
 	case src.email != "":
 		return "email:" + src.email
 	case src.name != "" && src.name != "live":
@@ -885,6 +872,7 @@ func (s *Service) liveSource(ctx context.Context, agent string) (usageSource, er
 		path:      path,
 		live:      true,
 		accountID: id.AccountID,
+		userID:    id.UserID,
 		email:     id.Email,
 		plan:      id.Plan,
 		slot:      account.SlotBase(g),
@@ -904,6 +892,7 @@ func (s *Service) sourceIdentity(agent, path, name string, live bool) (usageSour
 		path:      path,
 		live:      live,
 		accountID: id.AccountID,
+		userID:    id.UserID,
 		email:     id.Email,
 		plan:      id.Plan,
 		slot:      account.SlotBase(g),

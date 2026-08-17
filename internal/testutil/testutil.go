@@ -14,15 +14,24 @@ import (
 )
 
 func JWT(accountID, email, plan string, exp time.Time) string {
+	return JWTIdent(accountID, email, plan, "", exp)
+}
+
+func JWTIdent(accountID, email, plan, userID string, exp time.Time) string {
 	header, _ := json.Marshal(map[string]string{"alg": "none"})
+	auth := map[string]string{
+		"chatgpt_account_id": accountID,
+		"chatgpt_plan_type":  plan,
+	}
+	if userID != "" {
+		auth["chatgpt_user_id"] = userID
+		auth["user_id"] = userID
+	}
 	payload, _ := json.Marshal(map[string]any{
-		"exp":       exp.Unix(),
-		"email":     email,
-		"client_id": "app_EMoamEEZ73f0CkXaXp7hrann",
-		"https://api.openai.com/auth": map[string]string{
-			"chatgpt_account_id": accountID,
-			"chatgpt_plan_type":  plan,
-		},
+		"exp":                         exp.Unix(),
+		"email":                       email,
+		"client_id":                   "app_EMoamEEZ73f0CkXaXp7hrann",
+		"https://api.openai.com/auth": auth,
 	})
 	enc := func(b []byte) string {
 		return base64.RawURLEncoding.EncodeToString(b)
@@ -31,10 +40,14 @@ func JWT(accountID, email, plan string, exp time.Time) string {
 }
 
 func Grant(accountID, refresh string, exp time.Time) account.Grant {
+	return GrantIdent(accountID, "person@example.com", "business", "", refresh, exp)
+}
+
+func GrantIdent(accountID, email, plan, userID, refresh string, exp time.Time) account.Grant {
 	if exp.IsZero() {
 		exp = time.Now().Add(time.Hour)
 	}
-	access := JWT(accountID, "person@example.com", "business", exp)
+	access := JWTIdent(accountID, email, plan, userID, exp)
 	return account.Grant{
 		AccessToken:  access,
 		IDToken:      access,
