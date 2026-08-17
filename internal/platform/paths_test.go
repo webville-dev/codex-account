@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"nyashachiroro.com/codex-account/internal/platform"
+	"github.com/webville-dev/codex-account/internal/platform"
 )
 
 func TestResolveEnvOverrides(t *testing.T) {

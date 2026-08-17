@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"nyashachiroro.com/codex-account/internal/fileutil"
+	"github.com/webville-dev/codex-account/internal/fileutil"
 )
 
 func TestWriteJSONModeAndContents(t *testing.T) {

@@ -9,11 +9,11 @@ import (
 	"sort"
 	"strings"
 
-	"nyashachiroro.com/codex-account/internal/account"
-	"nyashachiroro.com/codex-account/internal/oauth"
-	"nyashachiroro.com/codex-account/internal/platform"
-	"nyashachiroro.com/codex-account/internal/toolauth"
-	"nyashachiroro.com/codex-account/internal/usage"
+	"github.com/webville-dev/codex-account/internal/account"
+	"github.com/webville-dev/codex-account/internal/oauth"
+	"github.com/webville-dev/codex-account/internal/platform"
+	"github.com/webville-dev/codex-account/internal/toolauth"
+	"github.com/webville-dev/codex-account/internal/usage"
 )
 
 type ListResult struct {

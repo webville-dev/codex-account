@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"nyashachiroro.com/codex-account/internal/usage"
+	"github.com/webville-dev/codex-account/internal/usage"
 )
 
 func TestFetchUnauthorizedThenOK(t *testing.T) {

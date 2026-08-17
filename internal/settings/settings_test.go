@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"nyashachiroro.com/codex-account/internal/settings"
+	"github.com/webville-dev/codex-account/internal/settings"
 )
 
 func TestLoadMissingUsesDefaultPi(t *testing.T) {

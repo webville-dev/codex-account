@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"nyashachiroro.com/codex-account/internal/fileutil"
-	"nyashachiroro.com/codex-account/internal/platform"
+	"github.com/webville-dev/codex-account/internal/fileutil"
+	"github.com/webville-dev/codex-account/internal/platform"
 )
 
 type Store struct {

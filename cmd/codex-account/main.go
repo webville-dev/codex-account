@@ -6,7 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"nyashachiroro.com/codex-account/internal/cli"
+	"github.com/webville-dev/codex-account/internal/cli"
 )
 
 func main() {

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"nyashachiroro.com/codex-account/internal/account"
+	"github.com/webville-dev/codex-account/internal/account"
 )
 
 const (

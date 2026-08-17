@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"nyashachiroro.com/codex-account/internal/account"
-	"nyashachiroro.com/codex-account/internal/platform"
+	"github.com/webville-dev/codex-account/internal/account"
+	"github.com/webville-dev/codex-account/internal/platform"
 )
 
 const (

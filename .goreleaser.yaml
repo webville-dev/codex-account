@@ -27,9 +27,9 @@ builds:
       - -mod=readonly
     ldflags:
       - -s -w
-      - -X nyashachiroro.com/codex-account/internal/version.Version={{.Version}}
-      - -X nyashachiroro.com/codex-account/internal/version.Commit={{.FullCommit}}
-      - -X nyashachiroro.com/codex-account/internal/version.BuildTime={{.CommitDate}}
+      - -X github.com/webville-dev/codex-account/internal/version.Version={{.Version}}
+      - -X github.com/webville-dev/codex-account/internal/version.Commit={{.FullCommit}}
+      - -X github.com/webville-dev/codex-account/internal/version.BuildTime={{.CommitDate}}
     mod_timestamp: "{{.CommitTimestamp}}"
 
 archives:

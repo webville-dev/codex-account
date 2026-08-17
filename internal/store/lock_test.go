@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"nyashachiroro.com/codex-account/internal/store"
+	"github.com/webville-dev/codex-account/internal/store"
 )
 
 func TestLockExcludesConcurrentHolders(t *testing.T) {

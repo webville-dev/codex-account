@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"nyashachiroro.com/codex-account/internal/account"
-	"nyashachiroro.com/codex-account/internal/testutil"
-	"nyashachiroro.com/codex-account/internal/toolauth"
+	"github.com/webville-dev/codex-account/internal/account"
+	"github.com/webville-dev/codex-account/internal/testutil"
+	"github.com/webville-dev/codex-account/internal/toolauth"
 )
 
 func Testdata(t *testing.T) string {

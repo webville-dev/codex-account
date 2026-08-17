@@ -1,4 +1,4 @@
-module nyashachiroro.com/codex-account
+module github.com/webville-dev/codex-account
 
 go 1.26.6
 

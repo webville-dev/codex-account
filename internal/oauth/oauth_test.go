@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"nyashachiroro.com/codex-account/internal/oauth"
-	"nyashachiroro.com/codex-account/internal/testutil"
+	"github.com/webville-dev/codex-account/internal/oauth"
+	"github.com/webville-dev/codex-account/internal/testutil"
 )
 
 func TestRefreshAndSanitize(t *testing.T) {

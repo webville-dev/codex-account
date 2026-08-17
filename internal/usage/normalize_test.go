@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"nyashachiroro.com/codex-account/internal/usage"
+	"github.com/webville-dev/codex-account/internal/usage"
 )
 
 func TestNormalizeFixtures(t *testing.T) {

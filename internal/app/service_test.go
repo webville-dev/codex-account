@@ -16,12 +16,12 @@ import (
 	"testing"
 	"time"
 
-	"nyashachiroro.com/codex-account/internal/account"
-	"nyashachiroro.com/codex-account/internal/app"
-	"nyashachiroro.com/codex-account/internal/oauth"
-	"nyashachiroro.com/codex-account/internal/platform"
-	"nyashachiroro.com/codex-account/internal/testutil"
-	"nyashachiroro.com/codex-account/internal/toolauth"
+	"github.com/webville-dev/codex-account/internal/account"
+	"github.com/webville-dev/codex-account/internal/app"
+	"github.com/webville-dev/codex-account/internal/oauth"
+	"github.com/webville-dev/codex-account/internal/platform"
+	"github.com/webville-dev/codex-account/internal/testutil"
+	"github.com/webville-dev/codex-account/internal/toolauth"
 )
 
 type refreshStub struct {

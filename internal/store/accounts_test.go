@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"nyashachiroro.com/codex-account/internal/store"
-	"nyashachiroro.com/codex-account/internal/testutil"
-	"nyashachiroro.com/codex-account/internal/toolauth"
+	"github.com/webville-dev/codex-account/internal/store"
+	"github.com/webville-dev/codex-account/internal/testutil"
+	"github.com/webville-dev/codex-account/internal/toolauth"
 )
 
 func TestRestoreCodexStashReplacesUncommittedAttempt(t *testing.T) {

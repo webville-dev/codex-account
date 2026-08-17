@@ -9,12 +9,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"nyashachiroro.com/codex-account/internal/account"
-	"nyashachiroro.com/codex-account/internal/app"
-	"nyashachiroro.com/codex-account/internal/oauth"
-	"nyashachiroro.com/codex-account/internal/platform"
-	"nyashachiroro.com/codex-account/internal/settings"
-	"nyashachiroro.com/codex-account/internal/version"
+	"github.com/webville-dev/codex-account/internal/account"
+	"github.com/webville-dev/codex-account/internal/app"
+	"github.com/webville-dev/codex-account/internal/oauth"
+	"github.com/webville-dev/codex-account/internal/platform"
+	"github.com/webville-dev/codex-account/internal/settings"
+	"github.com/webville-dev/codex-account/internal/version"
 )
 
 func Execute(ctx context.Context, args []string, in io.Reader, out, errW io.Writer, svc *app.Service) int {

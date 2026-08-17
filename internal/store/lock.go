@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"nyashachiroro.com/codex-account/internal/fileutil"
+	"github.com/webville-dev/codex-account/internal/fileutil"
 )
 
 func Lock(ctx context.Context, path string) (unlock func(), err error) {

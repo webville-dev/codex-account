@@ -7,13 +7,13 @@ import (
 	"os"
 	"time"
 
-	"nyashachiroro.com/codex-account/internal/account"
-	"nyashachiroro.com/codex-account/internal/oauth"
-	"nyashachiroro.com/codex-account/internal/platform"
-	"nyashachiroro.com/codex-account/internal/settings"
-	"nyashachiroro.com/codex-account/internal/store"
-	"nyashachiroro.com/codex-account/internal/toolauth"
-	"nyashachiroro.com/codex-account/internal/usage"
+	"github.com/webville-dev/codex-account/internal/account"
+	"github.com/webville-dev/codex-account/internal/oauth"
+	"github.com/webville-dev/codex-account/internal/platform"
+	"github.com/webville-dev/codex-account/internal/settings"
+	"github.com/webville-dev/codex-account/internal/store"
+	"github.com/webville-dev/codex-account/internal/toolauth"
+	"github.com/webville-dev/codex-account/internal/usage"
 )
 
 const refreshSkew = 120 * time.Second

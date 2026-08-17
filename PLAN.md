@@ -147,8 +147,8 @@ access or refresh tokens.
 
 ## Release checklist
 
-- [ ] Decide and configure the durable Git repository at the module path
-      `nyashachiroro.com/codex-account`.
+- [x] Decide and configure the durable Git repository at the module path
+      `github.com/webville-dev/codex-account`.
 - [x] Add CI for test, race, vet, build, and formatting checks.
 - [x] Build a versioned release binary.
 - [ ] Test all commands with isolated homes and a disposable credential store.

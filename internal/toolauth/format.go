@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"nyashachiroro.com/codex-account/internal/account"
-	"nyashachiroro.com/codex-account/internal/fileutil"
+	"github.com/webville-dev/codex-account/internal/account"
+	"github.com/webville-dev/codex-account/internal/fileutil"
 )
 
 type CodexFile struct {
