@@ -1,0 +1,7 @@
+{
+  "access_token": "eyJhbGciOiJub25lIn0.eyJleHAiOjk5OTk5OTk5OTksImVtYWlsIjoicGVyc29uQGV4YW1wbGUuY29tIiwiY2xpZW50X2lkIjoiYXBwX0VNb2FtRUVaNzNmMENrWGFYcDdocmFubiIsImh0dHBzOi8vYXBpLm9wZW5haS5jb20vYXV0aCI6eyJjaGF0Z3B0X2FjY291bnRfaWQiOiJ3b3Jrc3BhY2Utb25lIiwiY2hhdGdwdF9wbGFuX3R5cGUiOiJwbHVzIn19.sig",
+  "refresh_token": "test-refresh-workspace-one",
+  "expires_at_ms": 9999999999000,
+  "account_id": "workspace-one",
+  "email": "person@example.com"
+}

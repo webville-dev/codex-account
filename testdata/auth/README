@@ -1,0 +1,7 @@
+These fixtures are unsigned JWTs with obviously fake refresh tokens.
+They exist so adapter tests never touch real homes or keyrings.
+
+Workspace IDs: workspace-one, workspace-two
+Email: person@example.com
+Plan: plus
+Refresh: test-refresh-workspace-one / test-refresh-workspace-two

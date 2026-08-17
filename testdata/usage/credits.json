@@ -1,0 +1,20 @@
+{
+  "plan_type": "pro",
+  "rate_limit": {
+    "primary_window": {
+      "used_percent": 0,
+      "limit_window_seconds": 18000,
+      "reset_after_seconds": 0
+    },
+    "allowed": true,
+    "limit_reached": false
+  },
+  "credits": {
+    "has_credits": true,
+    "unlimited": false,
+    "balance": "12.50"
+  },
+  "spend_control": {
+    "limit": 100
+  }
+}
