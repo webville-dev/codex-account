@@ -11,11 +11,28 @@ Existing accounts should be created again with `codex-account login`.
 | `CODEX_HOME` | Codex home | `$HOME/.codex` |
 | `PI_CODING_AGENT_DIR` | Pi agent home | `$HOME/.pi/agent` |
 | `XDG_DATA_HOME` | OpenCode parent | `$HOME/.local/share` |
+| `XDG_CONFIG_HOME` | Config parent for this tool | `$HOME/.config` |
 | `OPENCODE_DATA` | OpenCode home (wins over XDG) | `$XDG_DATA_HOME/opencode` |
-| `CODEX_ACCOUNT_DIR` | Account metadata directory | `$CODEX_HOME/.codex-account` |
+| `CODEX_ACCOUNT_DIR` | Account metadata directory | `$XDG_CONFIG_HOME/codex-account` |
 | `CODEX_ACCOUNTS_HOME` | Saved grant directory | `$CODEX_ACCOUNT_DIR/accounts` |
 
-Codex credentials are always `$CODEX_HOME/auth.json`. There is no `AUTH_FILE`.
+Saved grants are one file per account:
+
+```text
+~/.config/codex-account/
+  accounts/<name>.json
+  settings.json          # {"primaryAgent":"pi"|"codex"}
+  .current
+  .pending-refresh.json
+  .lock
+```
+
+`settings.json` is optional. Missing file or omitted `primaryAgent` means `pi`.
+Allowed values today are `pi` and `codex` (the agents that can run OAuth).
+`-a/--agent` on `login` still overrides the setting.
+Unknown settings are rejected so spelling mistakes cannot silently change behavior.
+
+Codex live credentials stay at `$CODEX_HOME/auth.json`. There is no `AUTH_FILE`.
 
 `.current` lives in `CODEX_ACCOUNT_DIR`. `.pending-refresh.json` and the
 mutation lock live next to `CODEX_ACCOUNTS_HOME` (its parent directory).
@@ -27,15 +44,20 @@ mutation lock live next to `CODEX_ACCOUNTS_HOME` (its parent directory).
 | `help` | `-h`, `--help` | none | — | no | usage on stdout |
 | `version` | | none | — | no | build metadata on stdout |
 | `completion` | | `bash zsh fish powershell` | — | no | shell script on stdout |
-| `list` | | none | — | no | saved accounts; `*` live Pi, `c` live Codex; `(none)` if empty |
+| `list` | | none | — | no | saved accounts; `*` live primary, `p`/`c` the other OAuth agent; `(none)` if empty |
 | `current` | `status` | none | — | no | per-tool line plus `shared` summary |
-| `save` | | `-a/--agent/--from`, `--codex`, `--pi`, `--opencode`, `--zed`, `-n/--name` | all live tools when unnamed; Pi when named | yes | `Saved ...` or `Saved a, b.` |
+| `save` | | `-a/--agent/--from`, `--codex`, `--pi`, `--opencode`, `--zed`, `-n/--name` | all live tools when unnamed; primary agent when named | yes | `Saved ...` or `Saved a, b.` |
 | `switch` | `use` | `-n/--name` or positional `NAME` | required name | yes | switched all four tools |
-| `login` | | `-a/--agent pi\|codex` (default `pi`), `--device/--device-auth`, `-n/--name` | Pi browser OAuth | yes | notes on stderr/stdout; distributes to all four |
+| `login` | | `-a/--agent pi\|codex` (default `settings.primaryAgent`, else `pi`), `--device/--device-auth`, `-n/--name` | primary-agent OAuth | yes | notes on stderr/stdout; distributes to all four |
 | `sync` | | none | — | yes | already-in-sync or synced-from source |
-| `refresh` | | `-n/--name` or positional | live Pi, then OpenCode, Zed, Codex | yes | refreshed targets |
+| `refresh` | | `-n/--name` or positional | live primary, then remaining tools | yes | refreshed targets |
 | `usage` | `limits`, `quota` | `-a/--agent`, `-n/--name`, `--json`, `--all` | all distinct workspaces | maybe (token refresh) | human windows or JSON array |
 | `rm` | `remove`, `delete` | `-n/--name` or positional `NAME` | required name | yes (saved only) | `Removed saved account 'NAME'.` |
+
+An explicit source passed to `save` is exact and never falls back to another
+tool. Automatic source selection starts with the primary agent and falls back
+through the remaining tools. When grants are equally fresh, the primary agent
+wins the tie.
 
 `--name` and `--all` are mutually exclusive on `usage`. Login accepts only `pi`
 or `codex`. Save `--from` accepts `pi`, `codex`, `opencode`, `zed`.

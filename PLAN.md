@@ -24,6 +24,7 @@ internal/app/        workflows and safety invariants
 internal/account/    canonical Grant, identity, JWT metadata, naming
 internal/toolauth/   Codex, Pi, OpenCode, and Zed adapters
 internal/store/      account store, recovery, current pointer, lock, stash
+internal/settings/   settings.json loading, defaults, and validation
 internal/oauth/      browser/device login and refresh client
 internal/usage/      usage HTTP client and response normalization
 internal/platform/   paths, environment, subprocesses, clock
@@ -53,12 +54,16 @@ Environment overrides:
 - `CODEX_HOME`
 - `PI_CODING_AGENT_DIR`
 - `XDG_DATA_HOME`
+- `XDG_CONFIG_HOME`
 - `OPENCODE_DATA`
 - `CODEX_ACCOUNT_DIR`
 - `CODEX_ACCOUNTS_HOME`
 
 Codex credentials always live at `$CODEX_HOME/auth.json` and require
 `cli_auth_credentials_store = "file"` when that setting is present.
+Saved grants and settings default to `$XDG_CONFIG_HOME/codex-account`.
+`settings.json` may select `pi` or `codex` as `primaryAgent`; a missing setting
+defaults to `pi`.
 
 ## Safety invariants
 
@@ -110,7 +115,7 @@ The permanent Go suite must cover:
 - Workspace naming collisions and explicit alias conflicts.
 - Atomic writes and permissions.
 - Concurrent mutation lock exclusion.
-- Sync freshness and tie order for ordinary live grants.
+- Sync freshness and configured-primary tie order for ordinary live grants.
 - Unconditional recovery precedence over live grants.
 - Corrupt and cross-workspace recovery refusal.
 - Refresh failures retaining recovery.

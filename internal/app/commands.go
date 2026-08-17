@@ -17,7 +17,8 @@ import (
 )
 
 type ListResult struct {
-	Rows []ListRow
+	Rows         []ListRow
+	PrimaryAgent string
 }
 
 type ListRow struct {
@@ -30,6 +31,10 @@ type ListRow struct {
 
 func (s *Service) List(ctx context.Context) (ListResult, error) {
 	if err := s.Paths.CheckCodexStorage(); err != nil {
+		return ListResult{}, err
+	}
+	primary, err := s.PrimaryAgent()
+	if err != nil {
 		return ListResult{}, err
 	}
 	existing, grants, err := s.saved()
@@ -67,7 +72,7 @@ func (s *Service) List(ctx context.Context) (ListResult, error) {
 			LiveCodex: f.Name == codexName,
 		})
 	}
-	return ListResult{Rows: rows}, nil
+	return ListResult{Rows: rows, PrimaryAgent: primary}, nil
 }
 
 type CurrentResult struct {
@@ -158,11 +163,17 @@ func (s *Service) Save(ctx context.Context, opts SaveOptions) (SaveResult, error
 	var result SaveResult
 	err := s.withLock(ctx, func() error {
 		from := opts.From
+		fallback := false
 		if from == "" {
 			if opts.Name == "" {
 				from = "both"
 			} else {
-				from = "pi"
+				primary, err := s.PrimaryAgent()
+				if err != nil {
+					return err
+				}
+				from = primary
+				fallback = true
 			}
 		}
 		if from == "both" {
@@ -176,7 +187,7 @@ func (s *Service) Save(ctx context.Context, opts SaveOptions) (SaveResult, error
 			result.Message = "Saved " + strings.Join(saved, ", ") + "."
 			return nil
 		}
-		g, ok, err := s.liveFrom(ctx, from)
+		g, ok, err := s.liveFrom(ctx, from, fallback)
 		if err != nil {
 			return err
 		}
@@ -224,10 +235,10 @@ func (s *Service) Save(ctx context.Context, opts SaveOptions) (SaveResult, error
 	return result, err
 }
 
-func (s *Service) liveFrom(ctx context.Context, from string) (account.Grant, bool, error) {
+func (s *Service) liveFrom(ctx context.Context, from string, fallback bool) (account.Grant, bool, error) {
 	order := []string{from}
-	if from == "pi" {
-		order = liveOrder
+	if fallback {
+		order = livePriority(from)
 	}
 	for _, agent := range order {
 		g, ok, err := s.live(ctx, agent)
@@ -237,7 +248,7 @@ func (s *Service) liveFrom(ctx context.Context, from string) (account.Grant, boo
 		if ok {
 			return g, true, nil
 		}
-		if from != "pi" {
+		if !fallback {
 			break
 		}
 	}
@@ -362,7 +373,11 @@ func (s *Service) Sync(ctx context.Context) (SyncResult, error) {
 			}
 			lives["recovery"] = pending
 		}
-		winnerName, winner, err := pickWinner(lives)
+		primary, err := s.PrimaryAgent()
+		if err != nil {
+			return err
+		}
+		winnerName, winner, err := pickWinner(lives, primary)
 		if err != nil {
 			return err
 		}
@@ -411,7 +426,7 @@ func (s *Service) Sync(ctx context.Context) (SyncResult, error) {
 	return result, err
 }
 
-func pickWinner(lives map[string]account.Grant) (string, account.Grant, error) {
+func pickWinner(lives map[string]account.Grant, primary string) (string, account.Grant, error) {
 	if len(lives) == 0 {
 		return "", account.Grant{}, fmt.Errorf("no ChatGPT Codex login in Pi, Codex, OpenCode, or Zed")
 	}
@@ -445,14 +460,14 @@ func pickWinner(lives map[string]account.Grant) (string, account.Grant, error) {
 			bestName, best = name, g
 			continue
 		}
-		if better(g, name, best, bestName) {
+		if better(g, name, best, bestName, primary) {
 			bestName, best = name, g
 		}
 	}
 	return bestName, best, nil
 }
 
-func better(g account.Grant, name string, cur account.Grant, curName string) bool {
+func better(g account.Grant, name string, cur account.Grant, curName, primary string) bool {
 	ge, ce := g.AccessExpiry(), cur.AccessExpiry()
 	if ge.After(ce) {
 		return true
@@ -460,7 +475,16 @@ func better(g account.Grant, name string, cur account.Grant, curName string) boo
 	if ce.After(ge) {
 		return false
 	}
-	return syncRank[name] > syncRank[curName]
+	return liveRank(name, primary) < liveRank(curName, primary)
+}
+
+func liveRank(agent, primary string) int {
+	for rank, candidate := range livePriority(primary) {
+		if agent == candidate {
+			return rank
+		}
+	}
+	return len(agents)
 }
 
 type RefreshResult struct {
@@ -486,9 +510,13 @@ func (s *Service) Refresh(ctx context.Context, name string) (RefreshResult, erro
 				return loadErr
 			}
 		} else {
+			primary, err := s.PrimaryAgent()
+			if err != nil {
+				return err
+			}
 			var ok bool
 			var liveErr error
-			g, ok, liveErr = s.liveFrom(ctx, "pi")
+			g, ok, liveErr = s.liveFrom(ctx, primary, true)
 			if liveErr != nil {
 				return liveErr
 			}
@@ -691,6 +719,10 @@ func (s *Service) usageTargets(ctx context.Context, agentFilter, name string) ([
 	if agentFilter != "" {
 		want = []string{agentFilter}
 	}
+	primary, err := s.PrimaryAgent()
+	if err != nil {
+		return nil, err
+	}
 	var sources []usageSource
 	seen := map[string]struct{}{}
 	for _, agent := range want {
@@ -737,7 +769,7 @@ func (s *Service) usageTargets(ctx context.Context, agentFilter, name string) ([
 	var targets []usageTarget
 	for _, key := range order {
 		grouped := groups[key]
-		chosen := pickUsageSource(grouped)
+		chosen := pickUsageSource(grouped, primary)
 		var agentsPresent []string
 		seenAgent := map[string]struct{}{}
 		live := false
@@ -803,26 +835,26 @@ func usageGroupKey(src usageSource) string {
 	}
 }
 
-func pickUsageSource(sources []usageSource) usageSource {
+func pickUsageSource(sources []usageSource, primary string) usageSource {
 	best := sources[0]
 	for _, src := range sources[1:] {
-		if usageRank(src) < usageRank(best) {
+		if usageRank(src, primary) < usageRank(best, primary) {
 			best = src
 		}
 	}
 	return best
 }
 
-func usageRank(src usageSource) string {
+func usageRank(src usageSource, primary string) string {
 	live := "1"
 	if src.live {
 		live = "0"
 	}
-	pi := "1"
-	if src.agent == "pi" {
-		pi = "0"
+	pref := "1"
+	if src.agent == primary {
+		pref = "0"
 	}
-	return live + pi + src.name
+	return live + pref + src.name
 }
 
 func (s *Service) liveSource(ctx context.Context, agent string) (usageSource, error) {
@@ -1028,8 +1060,13 @@ func (s *Service) Login(ctx context.Context, opts LoginOptions) (LoginResult, er
 		}
 		agent := opts.Agent
 		if agent == "" {
-			agent = "pi"
+			var err error
+			agent, err = s.PrimaryAgent()
+			if err != nil {
+				return err
+			}
 		}
+		agent = strings.ToLower(agent)
 		if agent != "pi" && agent != "codex" {
 			return fmt.Errorf("login supports only 'pi' or 'codex'; the resulting grant is copied to every tool")
 		}

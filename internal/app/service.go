@@ -10,6 +10,7 @@ import (
 	"nyashachiroro.com/codex-account/internal/account"
 	"nyashachiroro.com/codex-account/internal/oauth"
 	"nyashachiroro.com/codex-account/internal/platform"
+	"nyashachiroro.com/codex-account/internal/settings"
 	"nyashachiroro.com/codex-account/internal/store"
 	"nyashachiroro.com/codex-account/internal/toolauth"
 	"nyashachiroro.com/codex-account/internal/usage"
@@ -19,9 +20,7 @@ const refreshSkew = 120 * time.Second
 
 var (
 	agents     = []string{"pi", "codex", "opencode", "zed"}
-	liveOrder  = []string{"pi", "opencode", "zed", "codex"}
 	writeOrder = []string{"zed", "codex", "pi", "opencode"}
-	syncRank   = map[string]int{"recovery": 4, "pi": 3, "opencode": 2, "zed": 1, "codex": 0}
 )
 
 type Service struct {
@@ -76,6 +75,28 @@ func New(cfg Service) *Service {
 }
 
 func (s *Service) now() time.Time { return s.Clock.Now() }
+
+func (s *Service) PrimaryAgent() (string, error) {
+	f, err := settings.Load(s.Paths.SettingsFile)
+	if err != nil {
+		return "", err
+	}
+	return f.PrimaryAgent, nil
+}
+
+func livePriority(primary string) []string {
+	preferred := []string{primary, "pi", "opencode", "zed", "codex"}
+	out := make([]string, 0, len(preferred))
+	seen := map[string]struct{}{}
+	for _, agent := range preferred {
+		if _, ok := seen[agent]; ok {
+			continue
+		}
+		seen[agent] = struct{}{}
+		out = append(out, agent)
+	}
+	return out
+}
 
 func (s *Service) withLock(ctx context.Context, fn func() error) error {
 	unlock, err := store.Lock(ctx, s.Paths.LockFile)
@@ -169,7 +190,11 @@ func (s *Service) snapshotLives(ctx context.Context) ([]string, error) {
 	}
 	var saved []string
 	seen := map[string]struct{}{}
-	for _, agent := range liveOrder {
+	primary, err := s.PrimaryAgent()
+	if err != nil {
+		return nil, err
+	}
+	for _, agent := range livePriority(primary) {
 		g, ok, err := s.live(ctx, agent)
 		if err != nil {
 			return saved, fmt.Errorf("read %s login: %w", agent, err)
@@ -183,7 +208,9 @@ func (s *Service) snapshotLives(ctx context.Context) ([]string, error) {
 		}
 		path := s.Store.SavedPath(name)
 		if cur, err := toolauth.ReadAnyFile(path); err == nil {
-			if cur.AccessExpiry().After(g.AccessExpiry()) {
+			// The configured primary is visited first. Preserve the earlier
+			// grant unless this source is strictly fresher.
+			if !g.AccessExpiry().After(cur.AccessExpiry()) {
 				if _, dup := seen[name]; !dup {
 					saved = append(saved, name)
 					seen[name] = struct{}{}

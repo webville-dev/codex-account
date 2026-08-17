@@ -25,6 +25,7 @@ type Paths struct {
 	OpenCodeAuth string
 	AccountDir   string
 	AccountsHome string
+	SettingsFile string
 	CurrentFile  string
 	PendingFile  string
 	CodexStash   string
@@ -48,8 +49,9 @@ func Resolve(env Env) (Paths, error) {
 	codexHome := firstNonEmpty(getenv("CODEX_HOME"), filepath.Join(home, ".codex"))
 	piHome := firstNonEmpty(getenv("PI_CODING_AGENT_DIR"), filepath.Join(home, ".pi", "agent"))
 	xdgData := firstNonEmpty(getenv("XDG_DATA_HOME"), filepath.Join(home, ".local", "share"))
+	xdgConfig := firstNonEmpty(getenv("XDG_CONFIG_HOME"), filepath.Join(home, ".config"))
 	openCodeHome := firstNonEmpty(getenv("OPENCODE_DATA"), filepath.Join(xdgData, "opencode"))
-	accountDir := firstNonEmpty(getenv("CODEX_ACCOUNT_DIR"), filepath.Join(codexHome, ".codex-account"))
+	accountDir := firstNonEmpty(getenv("CODEX_ACCOUNT_DIR"), filepath.Join(xdgConfig, "codex-account"))
 	accountsHome := firstNonEmpty(getenv("CODEX_ACCOUNTS_HOME"), filepath.Join(accountDir, "accounts"))
 	storeParent := filepath.Dir(accountsHome)
 
@@ -64,6 +66,7 @@ func Resolve(env Env) (Paths, error) {
 		OpenCodeAuth: filepath.Join(openCodeHome, "auth.json"),
 		AccountDir:   accountDir,
 		AccountsHome: accountsHome,
+		SettingsFile: filepath.Join(accountDir, "settings.json"),
 		CurrentFile:  filepath.Join(accountDir, ".current"),
 		PendingFile:  filepath.Join(storeParent, ".pending-refresh.json"),
 		CodexStash:   filepath.Join(accountDir, ".live-codex-stash.json"),

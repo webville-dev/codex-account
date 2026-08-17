@@ -85,7 +85,7 @@ func NewRoot(svc *app.Service, in io.Reader, out, errW io.Writer) *cobra.Command
 func listCmd(svc *app.Service) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
-		Short: "List saved accounts. * is the live Pi login",
+		Short: "List saved accounts. * is the live primary login",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			res, err := svc.List(cmd.Context())
@@ -99,8 +99,12 @@ func listCmd(svc *app.Service) *cobra.Command {
 			for _, row := range res.Rows {
 				prefix := " "
 				switch {
-				case row.LivePi:
+				case res.PrimaryAgent == "codex" && row.LiveCodex:
 					prefix = "*"
+				case res.PrimaryAgent != "codex" && row.LivePi:
+					prefix = "*"
+				case row.LivePi:
+					prefix = "p"
 				case row.LiveCodex:
 					prefix = "c"
 				}
@@ -223,12 +227,11 @@ func loginCmd(svc *app.Service) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if agent == "" {
-				agent = "pi"
-			}
-			agent = strings.ToLower(agent)
-			if agent != "pi" && agent != "codex" {
-				return fmt.Errorf("login supports only 'pi' or 'codex'; the resulting grant is copied to every tool")
+			if agent != "" {
+				agent = strings.ToLower(agent)
+				if agent != "pi" && agent != "codex" {
+					return fmt.Errorf("login supports only 'pi' or 'codex'; the resulting grant is copied to every tool")
+				}
 			}
 			res, err := svc.Login(cmd.Context(), app.LoginOptions{Agent: agent, Device: device, Name: resolved})
 			for _, note := range res.Notes {
@@ -243,7 +246,7 @@ func loginCmd(svc *app.Service) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVarP(&agent, "agent", "a", "", "login UI to use (pi or codex)")
+	cmd.Flags().StringVarP(&agent, "agent", "a", "", "login UI to use (pi or codex; default from settings.primaryAgent)")
 	cmd.Flags().StringVarP(&name, "name", "n", "", "saved account name")
 	cmd.Flags().BoolVar(&device, "device", false, "use device-code login")
 	cmd.Flags().Bool("device-auth", false, "alias for --device")
@@ -483,8 +486,11 @@ func completeNames(svc *app.Service) cobra.CompletionFunc {
 
 const longHelp = `Save and switch one ChatGPT login for Pi, Codex, OpenCode, and Zed.
 
-Pi owns login and is the usual source of truth; Codex, OpenCode, and Zed get converted copies.
+The configured primary agent owns login and is the preferred source when equally fresh grants exist.
+The other tools receive converted copies of that grant.
 Prefer this command instead of raw 'codex login'. Do not run 'codex logout' if you still want that saved account.
 
+Saved accounts live in $XDG_CONFIG_HOME/codex-account/accounts (default ~/.config/codex-account/accounts).
+primaryAgent in settings.json chooses the default login UI (pi or codex).
 Codex credential storage must be file (the default), not keyring/auto/ephemeral.
 Restart Pi/Codex/OpenCode/Zed after switching.`

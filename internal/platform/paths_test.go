@@ -44,6 +44,59 @@ func TestResolveEnvOverrides(t *testing.T) {
 	if p.CurrentFile != filepath.Join(home, "acct", ".current") {
 		t.Fatalf("current %s", p.CurrentFile)
 	}
+	if p.SettingsFile != filepath.Join(home, "acct", "settings.json") {
+		t.Fatalf("settings %s", p.SettingsFile)
+	}
+}
+
+func TestDefaultAccountStoreIsXDGConfig(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	p, err := platform.Resolve(platform.Env{
+		Home:   home,
+		Getenv: func(string) string { return "" },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := filepath.Join(home, ".config", "codex-account")
+	if p.AccountDir != base {
+		t.Fatalf("account dir %s", p.AccountDir)
+	}
+	if p.AccountsHome != filepath.Join(base, "accounts") {
+		t.Fatalf("accounts %s", p.AccountsHome)
+	}
+	if p.SettingsFile != filepath.Join(base, "settings.json") {
+		t.Fatalf("settings %s", p.SettingsFile)
+	}
+	if p.CurrentFile != filepath.Join(base, ".current") {
+		t.Fatalf("current %s", p.CurrentFile)
+	}
+	if p.PendingFile != filepath.Join(base, ".pending-refresh.json") {
+		t.Fatalf("pending %s", p.PendingFile)
+	}
+}
+
+func TestAccountStoreUsesXDGConfigHome(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	xdg := filepath.Join(home, "xdg-config")
+	p, err := platform.Resolve(platform.Env{
+		Home: home,
+		Getenv: func(k string) string {
+			if k == "XDG_CONFIG_HOME" {
+				return xdg
+			}
+			return ""
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(xdg, "codex-account", "accounts")
+	if p.AccountsHome != want {
+		t.Fatalf("got %s", p.AccountsHome)
+	}
 }
 
 func TestOpenCodeUsesXDGWhenOpenCodeDataUnset(t *testing.T) {

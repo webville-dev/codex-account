@@ -3,6 +3,7 @@ package app_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -48,10 +49,16 @@ func (z *zedStub) Get(ctx context.Context) (account.Grant, error) {
 }
 
 type runnerStub struct {
-	run func() error
+	run     func() error
+	lookErr error
 }
 
-func (r runnerStub) LookPath(string) (string, error) { return "/test/codex", nil }
+func (r runnerStub) LookPath(string) (string, error) {
+	if r.lookErr != nil {
+		return "", r.lookErr
+	}
+	return "/test/codex", nil
+}
 
 func (r runnerStub) Run(context.Context, string, []string, platform.RunOptions) error {
 	if r.run == nil {
@@ -87,6 +94,14 @@ func newSvc(t *testing.T, zed toolauth.CredentialStore, refresher oauth.TokenRef
 		Stderr:    io.Discard,
 	})
 	return svc, home
+}
+
+func writePrimaryAgent(t *testing.T, home testutil.TestHome, agent string) {
+	t.Helper()
+	data := []byte(fmt.Sprintf("{\"primaryAgent\":%q}\n", agent))
+	if err := os.WriteFile(home.Paths.SettingsFile, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestRefreshFailureKeepsRecoveryAndSyncConsumesIt(t *testing.T) {
@@ -423,5 +438,106 @@ func TestSuccessfulCodexLoginCommitsOnlyAfterValidation(t *testing.T) {
 	}
 	if _, err := os.Stat(home.Paths.CodexStash); !os.IsNotExist(err) {
 		t.Fatal("validated login should remove the rollback stash")
+	}
+}
+
+func TestPrimaryAgentDefaultsToPi(t *testing.T) {
+	t.Parallel()
+	svc, _ := newSvc(t, &zedStub{}, nil)
+	got, err := svc.PrimaryAgent()
+	if err != nil || got != "pi" {
+		t.Fatalf("%q %v", got, err)
+	}
+}
+
+func TestSaveExplicitSourceDoesNotFallBack(t *testing.T) {
+	t.Parallel()
+	svc, home := newSvc(t, &zedStub{}, nil)
+	writePrimaryAgent(t, home, "codex")
+	pi := testutil.Grant("workspace-one", "pi-refresh", time.Now().Add(time.Hour))
+	if err := toolauth.WritePiFile(home.Paths.PiAuth, pi, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := svc.Save(context.Background(), app.SaveOptions{From: "codex", Name: "work"})
+	if err == nil || !strings.Contains(err.Error(), home.Paths.CodexAuth) {
+		t.Fatalf("expected exact Codex source error, got %v", err)
+	}
+	if _, err := os.Stat(svc.Store.SavedPath("work")); !os.IsNotExist(err) {
+		t.Fatalf("explicit Codex source unexpectedly saved Pi grant: %v", err)
+	}
+}
+
+func TestSnapshotTieKeepsPrimaryGrant(t *testing.T) {
+	t.Parallel()
+	svc, home := newSvc(t, &zedStub{}, nil)
+	writePrimaryAgent(t, home, "codex")
+	expires := time.Now().Add(time.Hour)
+	pi := testutil.Grant("workspace-one", "pi-refresh", expires)
+	codex := testutil.Grant("workspace-one", "codex-refresh", expires)
+	if err := toolauth.WritePiFile(home.Paths.PiAuth, pi, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := toolauth.WriteCodexFile(home.Paths.CodexAuth, codex); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := svc.Save(context.Background(), app.SaveOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := toolauth.ReadAnyFile(svc.Store.SavedPath("person@example.com.business"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RefreshToken != "codex-refresh" {
+		t.Fatalf("snapshot selected non-primary equal-expiry grant: %+v", got)
+	}
+}
+
+func TestSyncTieUsesPrimaryAgent(t *testing.T) {
+	t.Parallel()
+	svc, home := newSvc(t, &zedStub{}, nil)
+	writePrimaryAgent(t, home, "codex")
+	expires := time.Now().Add(time.Hour)
+	pi := testutil.Grant("workspace-one", "pi-refresh", expires)
+	codex := testutil.Grant("workspace-one", "codex-refresh", expires)
+	if err := toolauth.WritePiFile(home.Paths.PiAuth, pi, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := toolauth.WriteCodexFile(home.Paths.CodexAuth, codex); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := svc.Sync(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := toolauth.ReadAnyFile(home.Paths.PiAuth)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RefreshToken != "codex-refresh" || !strings.Contains(result.Message, "codex") {
+		t.Fatalf("sync did not select primary Codex grant: %+v, %q", got, result.Message)
+	}
+}
+
+func TestLoginUsesPrimaryAgentFromSettings(t *testing.T) {
+	t.Parallel()
+	svc, home := newSvc(t, &zedStub{}, nil)
+	writePrimaryAgent(t, home, "codex")
+	svc.Runner = runnerStub{lookErr: errors.New("not found")}
+	_, err := svc.Login(context.Background(), app.LoginOptions{})
+	if err == nil || !strings.Contains(err.Error(), "codex") {
+		t.Fatalf("expected Codex login path, got %v", err)
+	}
+}
+
+func TestLoginRejectsInvalidPrimaryAgent(t *testing.T) {
+	t.Parallel()
+	svc, home := newSvc(t, &zedStub{}, nil)
+	writePrimaryAgent(t, home, "zed")
+	_, err := svc.Login(context.Background(), app.LoginOptions{})
+	if err == nil || !strings.Contains(err.Error(), "primaryAgent") {
+		t.Fatalf("got %v", err)
 	}
 }

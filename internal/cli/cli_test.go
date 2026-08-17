@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -57,6 +58,39 @@ func TestListGoldenEmpty(t *testing.T) {
 	code := cli.Execute(context.Background(), []string{"list"}, strings.NewReader(""), &out, io.Discard, svc)
 	if code != 0 || strings.TrimSpace(out.String()) != "(none)" {
 		t.Fatalf("%d %q", code, out.String())
+	}
+}
+
+func TestListMarksConfiguredPrimary(t *testing.T) {
+	t.Parallel()
+	home := testutil.NewHome(t)
+	if err := os.WriteFile(home.Paths.SettingsFile, []byte("{\"primaryAgent\":\"codex\"}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	expires := time.Now().Add(time.Hour)
+	pi := testutil.Grant("pi-workspace", "pi-refresh", expires)
+	codex := testutil.Grant("codex-workspace", "codex-refresh", expires)
+	if err := toolauth.WritePiFile(home.Paths.PiAuth, pi, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := toolauth.WriteCodexFile(home.Paths.CodexAuth, codex); err != nil {
+		t.Fatal(err)
+	}
+	if err := toolauth.WriteCodexFile(home.Paths.AccountsHome+"/pi-work.json", pi); err != nil {
+		t.Fatal(err)
+	}
+	if err := toolauth.WriteCodexFile(home.Paths.AccountsHome+"/codex-work.json", codex); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := app.New(app.Service{Paths: home.Paths, Zed: &toolauth.MemoryStore{}})
+	var out bytes.Buffer
+	code := cli.Execute(context.Background(), []string{"list"}, strings.NewReader(""), &out, io.Discard, svc)
+	if code != 0 {
+		t.Fatalf("list exit %d: %s", code, out.String())
+	}
+	if !strings.Contains(out.String(), "* codex-work") || !strings.Contains(out.String(), "p pi-work") {
+		t.Fatalf("primary markers missing:\n%s", out.String())
 	}
 }
 
