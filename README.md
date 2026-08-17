@@ -2,9 +2,8 @@
 
 Save one ChatGPT Codex login and switch it across Pi, Codex, OpenCode, and Zed.
 
-[![CI](https://img.shields.io/github/actions/workflow/status/webville-dev/codex-account/ci.yml?branch=main)](https://github.com/webville-dev/codex-account/actions/workflows/ci.yml)
-[![Go](https://img.shields.io/github/go-mod/go-version/webville-dev/codex-account)](https://go.dev/dl/)
-[![Release](https://img.shields.io/github/v/release/webville-dev/codex-account)](https://github.com/webville-dev/codex-account/releases)
+[![CI](https://github.com/webville-dev/codex-account/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/webville-dev/codex-account/actions/workflows/ci.yml)
+[![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev/dl/)
 
 Log in once through Pi, Codex, or OpenCode. This CLI converts that grant into each tool's expected format, keeps named copies in `~/.config/codex-account/`, and can refresh or restore them without running `codex login` / `codex logout` by hand.
 
